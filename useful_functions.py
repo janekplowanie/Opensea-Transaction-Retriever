@@ -247,15 +247,37 @@ def extract_traits(url):
     :return: A list of dictionaries representing the traits extracted from the metadata.
     """
 
-    response = requests.get(url)
-    if response.status_code == 200:
-        metadata = response.json()
-        traits = metadata.get('attributes', [])
-        return traits
-    else:
-        print(f"Error extracting traits from {url}: Status Code {response.status_code}")
-        return []
+    max_retries = 3  # Maximum number of retries
+    retries = 0
 
+    while retries < max_retries:
+
+        response = requests.get(url)
+
+        if response.status_code == 200:
+
+            metadata = response.json()
+            traits = metadata.get('attributes', [])  # Returns a list of attributes
+            return traits
+
+        elif response.status_code == 429:  # Too Many Requests
+
+            if 'Retry-After' in response.headers:
+                retry_after = int(response.headers['Retry-After'])
+                print(f"Rate limit exceeded. Waiting for {retry_after} seconds before retrying...")
+                time.sleep(retry_after)  # Wait for the specified duration before retrying
+
+            else:
+                print("Rate limit exceeded. Waiting for a default duration before retrying...")
+                time.sleep(10)  # Default wait time
+
+            retries += 1
+        else:
+            print(f"Error extracting traits from {url}: Status Code {response.status_code}")
+            return []
+
+    print("Maximum number of retries reached. Aborting.")
+    return []
 
 # %%
 def get_nft_traits(transactions: pd.DataFrame):
@@ -266,26 +288,51 @@ def get_nft_traits(transactions: pd.DataFrame):
    :return: A pandas DataFrame with added 'nft.traits' column containing traits for each NFT.
    """
 
+    # Check if 'nft.traits' column already exists
+    if 'nft.traits' not in transactions.columns:
+        transactions['nft.traits'] = None  # Initialize the column if it doesn't exist
+
     # Group DataFrame by unique NFT metadata URLs
     grouped = transactions.groupby('nft.metadata_url')  # print(grouped.ngroups) number of unique groups
-
-    # Dictionary to store NFT metadata URLs and corresponding traits
-    nft_traits = {}
 
     # Iterate over each group
     for url, group in grouped:
         # Extract traits for the current NFT
         # Each group corresponds to transactions associated with a unique NFT metadata URL
         traits = extract_traits(url)
-        # Store traits for the current NFT
-        nft_traits[url] = traits
 
-    # Create a new DataFrame with NFT metadata URLs and their traits
-    df_nft_traits = pd.DataFrame({'nft.metadata_url': list(nft_traits.keys()), 'nft.traits': list(nft_traits.values())})
+        # Assign the extracted traits to the corresponding rows in the original DataFrame
+        transactions.loc[group.index, 'nft.traits'] = len(group.index) * [[traits]]
 
-    # Merge the new DataFrame with the original transactions DataFrame
-    df_merged = pd.merge(transactions, df_nft_traits, on='nft.metadata_url', how='left')
+    return transactions
 
-    return df_merged
+#%%
+def category_frequency(rarity_scores: dict) -> dict:
+    """
+    Sums the number of NFTs per trait category
+
+    :param rarity_scores: A dictionary containing rarity scores for each trait category.
+    :return: A dictionary containing the sum of NFTs per trait category
+    """
+    summed_scores = {}
+    for category, traits in rarity_scores.items():
+        summed_scores[category] = sum(traits.values())
+    return summed_scores
+
+#%%
+def calculate_rarity_scores(traits_data: dict, total_nfts: int) -> dict:
+    """
+    Calculates the rarity scores for each trait based on the provided traits data.
+
+    :param traits_data: A dictionary containing trait categories and their corresponding counts.
+    :param total_nfts: Total number of NFTs.
+    :return: A dictionary containing rarity scores for each trait.
+    """
+    rarity_scores = {}
+    for category, traits in traits_data.items(): # Category ex. Background, Fur
+        rarity_scores[category] = {}
+        for trait, count in traits.items():
+            rarity_scores[category][trait] = 1 / (count / total_nfts)
+    return rarity_scores
 
 #%%
