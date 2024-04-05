@@ -336,3 +336,34 @@ def calculate_rarity_scores(traits_data: dict, total_nfts: int) -> dict:
     return rarity_scores
 
 #%%
+def add_rarity_score(transactions: list, rarity_scores_collection: dict):
+    """
+    Add rarity scores to each transaction for a given collection based on rarity scores for a given trait.
+
+    Args:
+    - transactions (list): List of dictionaries representing transactions.
+    - rarity_scores_collection (dict): Dictionary containing rarity scores for traits.
+
+    Returns:
+    - None: The function modifies transactions in place.
+    """
+
+    # Iterate over each dictionary in bakc_t
+    for item in transactions:
+        # Check if 'nft.traits' exists and is not None
+        if item.get('nft.traits') is not None:
+            # Extract trait values from 'nft.traits' and create a list of dictionaries
+            traits = [{trait["trait_type"]: trait['value']} for trait in item['nft.traits']]
+
+            # Initialize rarity score
+            rarity_score = 0
+
+            # Sum up rarity scores for each trait
+            for trait_pair in traits:
+                for key, value in trait_pair.items():
+                    if key in rarity_scores_collection and value in rarity_scores_collection[key]:
+                        rarity_score += rarity_scores_collection[key][value]
+
+            # Add 'rarity_score' column to the current dictionary
+            item['rarity_score'] = rarity_score
+#%%
