@@ -67,7 +67,7 @@ with open('Collection_traits/bored-ape-kennel-club_traits.json') as a:
 total_nfts_bakc = 10000 # Total supply of BAKC NFTs
 
 # Based on the frequency of traits for BAKC, rarity score for trait is calculated
-rarity_scores_bakc = calculate_rarity_scores(traits_bakc['counts'], total_nfts_bakc)
+rarity_scores_bakc = calculate_rarity_scores(traits_bakc, total_nfts_bakc)
 
 # Rarity score for any single NFT is calculated
 add_rarity_score(df_bakc, rarity_scores_bakc)
