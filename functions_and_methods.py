@@ -6,9 +6,11 @@ import calendar
 import os
 import pandas as pd
 from dotenv import load_dotenv
+from tenacity import retry, wait_exponential
 
 
-def get_opsea_trans_by_collec(collection_slug: str, t_before: str, t_after: str, event_type: str, file_name: str):
+def get_opsea_trans_by_collec(collection_slug: str, t_before: str, t_after: str, event_type: str,
+                              file_name: str) -> None:
     """
     :param collection_slug: A string representing the slug of the collection on OpenSea.
     :param t_before: A string representing the timestamp of the latest transaction to fetch (inclusive),
@@ -59,8 +61,8 @@ def get_opsea_trans_by_collec(collection_slug: str, t_before: str, t_after: str,
     while True:
         response = requests.get(url, headers=headers)
         transactions = response.json()
-        # Append transactions to the list
-        all_transactions.append(transactions)
+        # Extend the list by new transactions
+        all_transactions.extend(transactions.get('asset_events', []))
 
         if 'next' in transactions and transactions['next']:  # deleted: is not None
             next_transaction_number = transactions['next']
@@ -79,79 +81,6 @@ def get_opsea_trans_by_collec(collection_slug: str, t_before: str, t_after: str,
 
 
 # %%
-
-def list_of(list_of_data, trans_block, element):
-    """
-    :param list_of_data: A variable that contains a list of transaction blocks.
-    :param trans_block: The key indicating the transaction block number.
-    :param element: The key indicating the element to be printed from the asset_events list.
-
-    :return: list of values for the given element
-    """
-    list_of_values = []
-    for i in range(0, len(list_of_data[trans_block]['asset_events'])):
-        list_of_values.append(list_of_data[trans_block]['asset_events'][i][element])
-
-    return list_of_values
-
-
-# %%
-def myenumerator(x, column):
-    """
-    :param x: list, the input list or dataframe
-    :param column: int or str, the column index or name to be enumerated
-    :return: None
-
-    Enumerates the elements in the specified column of the input list or dataframe.
-    The function iterates over the elements in the specified column of the input list or dataframe using the enumerate() function.
-    Each element is assigned a unique index starting from 0. The function then prints the index and the corresponding element.
-
-    Example Usage:
-    --------------
-    >>> x = {'A': [10, 20, 30], 'B': [40, 50, 60]}
-    >>> column = 'A'
-    >>> myenumerator(x, column)
-    Entry n: 0 , 10
-    Entry n: 1 , 20
-    Entry n: 2 , 30
-
-    Note:
-    -----
-    - The input column can be specified either as an index or a column name.
-    - The function does not return any value, it only prints the enumerated entries.
-
-    """
-    for index, transaction in enumerate(x[column]):
-        print(f'Entry n: {index} , {transaction} \n')
-
-
-# %%
-def extract_and_print_keys_from_dict(d: dict):
-    """
-    Extracts and prints all keys from a nested dictionary.
-
-    :param d: The dictionary to extract keys from.
-    :type d: dict
-    :return: None
-    """
-
-    def extract_keys(d, parent_key=''):
-        keys = []
-        for k, v in d.items():
-            new_key = f"{parent_key}.{k}" if parent_key else k
-            keys.append(new_key)
-            if isinstance(v, dict):
-                keys.extend(extract_keys(v, new_key))
-        return keys
-
-    keys = extract_keys(d)
-
-    # Printing the keys
-    for key in keys:
-        print(key)
-
-
-# %%
 def extract_asset_events(dict_list: list):
     """
     Extracts asset events from a list of dictionaries.
@@ -164,19 +93,6 @@ def extract_asset_events(dict_list: list):
         if 'asset_events' in item:
             asset_events_list.extend(item['asset_events'])
     return asset_events_list
-
-
-# %%
-def how_long(file_data):
-    """
-    Calculate the total number of asset events in the given file_data.
-
-    :param file_data: The data containing the asset events.
-    :return: The total number of asset events in the file_data.
-
-    """
-    event_count = sum(len(block['asset_events']) for block in file_data)
-    return event_count
 
 
 # %%
@@ -228,7 +144,9 @@ def get_traits_collection(collection_slug: str):
 
         # Save response to a JSON file
         file_path = os.path.join(directory, f"{collection_slug}_traits.json")
-        traits = response.json()
+        metadata = response.json()
+        traits = metadata.get('counts', [])  # 2 keys in the dict: categories and counts
+
         with open(file_path, 'w') as file:
             json.dump(traits, file)
 
@@ -279,6 +197,7 @@ def extract_traits(url):
     print("Maximum number of retries reached. Aborting.")
     return []
 
+
 # %%
 def get_nft_traits(transactions: pd.DataFrame):
     """
@@ -306,6 +225,7 @@ def get_nft_traits(transactions: pd.DataFrame):
 
     return transactions
 
+
 #%%
 def category_frequency(rarity_scores: dict) -> dict:
     """
@@ -319,6 +239,7 @@ def category_frequency(rarity_scores: dict) -> dict:
         summed_scores[category] = sum(traits.values())
     return summed_scores
 
+
 #%%
 def calculate_rarity_scores(traits_data: dict, total_nfts: int) -> dict:
     """
@@ -329,11 +250,12 @@ def calculate_rarity_scores(traits_data: dict, total_nfts: int) -> dict:
     :return: A dictionary containing rarity scores for each trait.
     """
     rarity_scores = {}
-    for category, traits in traits_data.items(): # Category ex. Background, Fur
+    for category, traits in traits_data.items():  # Category ex. Background, Fur
         rarity_scores[category] = {}
         for trait, count in traits.items():
             rarity_scores[category][trait] = 1 / (count / total_nfts)
     return rarity_scores
+
 
 #%%
 def add_rarity_score(transactions: list, rarity_scores_collection: dict):
@@ -348,7 +270,7 @@ def add_rarity_score(transactions: list, rarity_scores_collection: dict):
     - None: The function modifies transactions in place.
     """
 
-    # Iterate over each dictionary in bakc_t
+    # Iterate over each dictionary in collection transaction
     for item in transactions:
         # Check if 'nft.traits' exists and is not None
         if item.get('nft.traits') is not None:
@@ -366,4 +288,74 @@ def add_rarity_score(transactions: list, rarity_scores_collection: dict):
 
             # Add 'rarity_score' column to the current dictionary
             item['rarity_score'] = rarity_score
+
+
+#%%
+def get_opsea_trans_by_collec_experimental(collection_slug: str, t_before: str, t_after: str, event_type: str,
+                                           file_name: str) -> None:
+    """
+    This is a newer implementation of `get_opsea_trans_by_collec` function.
+
+    :param collection_slug: The slug of the collection on OpenSea.
+    :param t_before: The timestamp of the latest transaction to fetch (inclusive), format 'Y-m-d H:M:S'.
+    :param t_after: The timestamp of the earliest transaction to fetch (inclusive), format 'Y-m-d H:M:S'.
+    :param event_type: The type of event to filter transactions (e.g., 'successful').
+    :param file_name: The name of the file to save fetched transactions in JSON format.
+
+    Note:
+    -----
+    - Make sure to create .env file in the Opensea-Transaction-Retriever directory where you create a string variable
+      "API_KEY" with your actual Opensea API key, replace "my-collection" with the actual collection slug
+      and adjust the time range and event type according to your requirements.
+    """
+
+    # Check for .env file
+    if not os.path.isfile(".env"):
+        raise FileNotFoundError(
+            ".env file not found. Create a .env file with required environment variables.")
+
+    # Load environment variables
+    load_dotenv()
+    api_key = os.getenv("API_KEY")
+
+    start_time = time.time()
+
+    t_after_unix = calendar.timegm(time.strptime(t_after, '%Y-%m-%d %H:%M:%S'))
+    t_before_unix = calendar.timegm(time.strptime(t_before, '%Y-%m-%d %H:%M:%S'))
+
+    url = f"https://api.opensea.io/api/v2/events/collection/{collection_slug}?after={t_after_unix}&before={t_before_unix}&event_type={event_type}"
+    base_url = url
+    headers = {
+        "accept": "application/json",
+        "x-api-key": api_key
+    }
+
+    all_transactions = []
+
+    @retry(wait=wait_exponential(multiplier=2, min=1, max=8))  # Configure retry attempts with backoff
+    def fetch_transactions(url):
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise for unsuccessful responses (e.g., 429)
+        return response.json()
+
+    while True:
+        transactions = fetch_transactions(url)
+        all_transactions.extend(transactions.get('asset_events', []))
+
+        if 'next' in transactions and transactions['next']:
+            next_transaction_number = transactions['next']
+            url = f"{base_url}&next={next_transaction_number}"
+        else:
+            break
+
+    # Save transactions to file
+    with open(f'Transaction_files/{file_name}.json', 'w') as file:
+        json.dump(all_transactions, file)
+
+    end_time = time.time()
+    elapsed_time_seconds = end_time - start_time
+    elapsed_time_minutes = elapsed_time_seconds / 60
+    print(f'The function took {elapsed_time_minutes} minutes to run')
+    print(f"Fetched {len(all_transactions)} transactions")
+
 #%%
