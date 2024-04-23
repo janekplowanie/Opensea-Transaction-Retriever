@@ -222,6 +222,7 @@ def get_nft_traits(transactions: pd.DataFrame):
 
         # Assign the extracted traits to the corresponding rows in the original DataFrame
         transactions.loc[group.index, 'nft.traits'] = len(group.index) * [[traits]]
+        # TODO: Change the way traits are added to the transactions, now they are unnecessarily nested
 
     return transactions
 
