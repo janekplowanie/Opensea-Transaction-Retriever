@@ -42,6 +42,10 @@ def get_opsea_trans_by_collec(collection_slug: str, t_before: str, t_after: str,
 
     # Load environment variables from .env file
     load_dotenv()
+
+    if "API_KEY" not in os.environ:
+        raise ValueError("No API_KEY found. Please add your Opensea API KEY to your .env file")
+
     api_key = os.getenv("API_KEY")
 
     start_time = time.time()
