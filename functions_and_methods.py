@@ -42,6 +42,10 @@ def get_opsea_trans_by_collec(collection_slug: str, t_before: str, t_after: str,
 
     # Load environment variables from .env file
     load_dotenv()
+
+    if "API_KEY" not in os.environ:
+        raise ValueError("No API_KEY found. Please add your Opensea API KEY to your .env file")
+
     api_key = os.getenv("API_KEY")
 
     start_time = time.time()
@@ -78,6 +82,7 @@ def get_opsea_trans_by_collec(collection_slug: str, t_before: str, t_after: str,
     elapsed_time_seconds = end_time - start_time
     elapsed_time_minutes = elapsed_time_seconds / 60
     print(f'The function took {elapsed_time_minutes} minutes to run')
+    print(f"Fetched {len(all_transactions)} transactions")
 
 
 # %%
@@ -222,6 +227,7 @@ def get_nft_traits(transactions: pd.DataFrame):
 
         # Assign the extracted traits to the corresponding rows in the original DataFrame
         transactions.loc[group.index, 'nft.traits'] = len(group.index) * [[traits]]
+        # TODO: Change the way traits are added to the transactions, now they are unnecessarily nested
 
     return transactions
 
@@ -295,6 +301,7 @@ def get_opsea_trans_by_collec_experimental(collection_slug: str, t_before: str, 
                                            file_name: str) -> None:
     """
     This is a newer implementation of `get_opsea_trans_by_collec` function.
+    It adds the @retry module from Tenacity Library.
 
     :param collection_slug: The slug of the collection on OpenSea.
     :param t_before: The timestamp of the latest transaction to fetch (inclusive), format 'Y-m-d H:M:S'.
@@ -304,7 +311,8 @@ def get_opsea_trans_by_collec_experimental(collection_slug: str, t_before: str, 
 
     Note:
     -----
-    - Make sure to create .env file in the Opensea-Transaction-Retriever directory where you create a string variable
+    -
+    Make sure to create .env file in the Opensea-Transaction-Retriever directory where you create a string variable
       "API_KEY" with your actual Opensea API key, replace "my-collection" with the actual collection slug
       and adjust the time range and event type according to your requirements.
     """
@@ -347,6 +355,75 @@ def get_opsea_trans_by_collec_experimental(collection_slug: str, t_before: str, 
             url = f"{base_url}&next={next_transaction_number}"
         else:
             break
+
+    # Save transactions to file
+    with open(f'Transaction_files/{file_name}.json', 'w') as file:
+        json.dump(all_transactions, file)
+
+    end_time = time.time()
+    elapsed_time_seconds = end_time - start_time
+    elapsed_time_minutes = elapsed_time_seconds / 60
+    print(f'The function took {elapsed_time_minutes} minutes to run')
+    print(f"Fetched {len(all_transactions)} transactions")
+
+
+#%%
+
+def get_opsea_trans_by_collec_experiment_2(collection_slug: str, t_before: str, t_after: str, event_type: str,
+                                           file_name: str) -> None:
+    """
+    This is a newer implementation of `get_opsea_trans_by_collec` function.
+    Besides adding the @retry module from Tenacity Library, this implementation creates a Session object:
+    session = requests.Session() to keep the same session for all the get requests.
+
+    :param collection_slug: The slug of the collection on OpenSea.
+    :param t_before: The timestamp of the latest transaction to fetch (inclusive), format 'Y-m-d H:M:S'.
+    :param t_after: The timestamp of the earliest transaction to fetch (inclusive), format 'Y-m-d H:M:S'.
+    :param event_type: The type of event to filter transactions (e.g., 'successful').
+    :param file_name: The name of the file to save fetched transactions in JSON format.
+    """
+
+    # Check for .env file and API key existence (assuming set in system environment)
+    if not os.getenv("API_KEY"):
+        raise ValueError("No API_KEY found. Please set your Opensea API KEY in your system environment.")
+
+    api_key = os.getenv("API_KEY")
+
+    start_time = time.time()
+
+    t_after_unix = calendar.timegm(time.strptime(t_after, '%Y-%m-%d %H:%M:%S'))
+    t_before_unix = calendar.timegm(time.strptime(t_before, '%Y-%m-%d %H:%M:%S'))
+
+    url = f"https://api.opensea.io/api/v2/events/collection/{collection_slug}?after={t_after_unix}&before={t_before_unix}&event_type={event_type}"
+    base_url = url
+    headers = {
+        "accept": "application/json",
+        "x-api-key": api_key
+    }
+
+    all_transactions = []
+
+    # Create a single session for requests
+    session = requests.Session()
+
+    @retry(wait=wait_exponential(multiplier=2, min=1, max=10))
+    def fetch_transactions(url):
+        response = session.get(url, headers=headers)
+        response.raise_for_status()  # Raise for unsuccessful responses (e.g., 429)
+        return response.json()
+
+    while True:
+        transactions = fetch_transactions(url)
+        all_transactions.extend(transactions.get('asset_events', []))
+
+        if 'next' in transactions and transactions['next']:
+            next_transaction_number = transactions['next']
+            url = f"{base_url}&next={next_transaction_number}"
+        else:
+            break
+
+    # Close the session after use
+    session.close()
 
     # Save transactions to file
     with open(f'Transaction_files/{file_name}.json', 'w') as file:
