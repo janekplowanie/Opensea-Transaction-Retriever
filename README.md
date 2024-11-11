@@ -21,11 +21,33 @@ python -m venv opensea-venv
 # On Windows:
 opensea-venv\Scripts\activate
 # On macOS/Linux:
-source opensea-venv/bin/activate
+source opensea-venv/bin/activate 
 
 # Install the package (will also install all required dependencies)
 pip install opensea-transaction-retriever
 ```
+
+## Quick Start
+
+```python
+from opensea_transaction_retriever import OpenSeaClient
+
+# Initialize client
+client = OpenSeaClient(api_key="your_opensea_api_key")
+
+# Fetch transactions
+transactions = client.get_collection_transactions(
+    collection_slug="boredapeyachtclub",
+    t_before="2024-01-01 00:00:00",
+    t_after="2023-12-01 00:00:00"
+)
+```
+
+## Documentation
+For detailed documentation, see the [docs](docs/) directory:
+- [API Reference](docs/api.md)
+- [Usage Guide](docs/usage.md)
+
 
 ### For Developers
 
@@ -44,27 +66,6 @@ pip install -e .
 # Run tests
 pytest tests/
 ```
-
-## Quick Start
-
-```python
-from opensea_transaction_retriever import OpenSeaClient
-
-# Initialize client
-client = OpenSeaClient(api_key="your_api_key")
-
-# Fetch transactions
-transactions = client.get_collection_transactions(
-    collection_slug="boredapeyachtclub",
-    t_before="2024-01-01 00:00:00",
-    t_after="2023-12-01 00:00:00"
-)
-```
-
-## Documentation
-For detailed documentation, see the [docs](docs/) directory:
-- [API Reference](docs/api.md)
-- [Usage Guide](docs/usage.md)
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
