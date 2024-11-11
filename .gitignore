@@ -1,10 +1,42 @@
-.env
-Transaction_files/
-Collections_DB_paper.ipynb
-.DS_Store
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+Transaction_files/
 Collection_traits/
 Transactions_with_traits/
-Test_Sessions.ipynb
-Statistical_analysis.ipynb
+*.ipynb
+.DS_Store
 
