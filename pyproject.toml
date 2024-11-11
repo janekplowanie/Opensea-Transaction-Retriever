@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opensea-transaction-retriever"
+version = "0.1.0"
+description = "A Python library for retrieving and analyzing NFT transactions from OpenSea"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "requests>=2.28.0",
+    "pandas>=1.5.0",
+    "matplotlib>=3.5.0",
+    "python-dotenv>=0.19.0",
+    "tenacity>=8.0.0"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/janekplowanie/Opensea-Transaction-Retriever"
+"Bug Tracker" = "https://github.com/janekplowanie/Opensea-Transaction-Retriever/issues"
